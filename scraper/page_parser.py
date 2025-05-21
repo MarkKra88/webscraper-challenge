@@ -11,11 +11,14 @@ class PageParser:
     def extract_from_nested(self, parent_selector: str, child_selector: str) -> Optional[str]:
         """ For standard div > p lookups"""
         parent = self.soup.select_one(parent_selector)
-        if parent:
-            child = parent.select_one(child_selector)
-            if child and child.text:
-                return child.text.strip()
-        return None
+        if not parent:
+            raise ValueError(f"Parent selector not found: {parent_selector}")
+
+        child = parent.select_one(child_selector)
+        if not child or not child.text:
+            raise ValueError(f"Child selector not found or empty: {child_selector} inside {parent_selector}")
+
+        return child.text.strip()
 
     def extract_from_nested_by_attribute(
             self,
@@ -33,7 +36,7 @@ class PageParser:
                 value = container.select_one(value_selector)
                 if value and value.text:
                     return value.text.strip()
-        return None
+        raise ValueError(f"No matching container found for label attribute: {label_attr}={label_value}")
 
     def extract_from_nested_by_label_text(
             self,
@@ -50,7 +53,7 @@ class PageParser:
                 value = container.select_one(value_selector)
                 if value and value.text:
                     return value.text.strip()
-        return None
+        raise ValueError(f"Label text '{label_text}' not found in container: {container_selector}")
 
     def extract_repeating_labeled_items(
             self,
@@ -59,9 +62,11 @@ class PageParser:
             value_selector: str
     ) -> list[dict]:
         """Extracts repeated items with a label and value from a list of blocks."""
-        items = []
         blocks = self.soup.select(item_selector)
+        if not blocks:
+            raise ValueError(f"No items found for selector: {item_selector}")
 
+        items = []
         for block in blocks:
             label_el = block.select_one(label_selector)
             value_el = block.select_one(value_selector)
@@ -88,14 +93,13 @@ class PageParser:
         """
         container = self.soup.select_one(container_selector)
         if not container:
-            print(f"Container not found: {container_selector}")
-            return []
+            raise ValueError(f"Container not found: {container_selector}")
 
         labels = [el.text.strip() for el in container.select(label_selector)]
         values = [el.text.strip() for el in container.select(value_selector)]
 
         if len(labels) != len(values):
-            print(f"Mismatch: {len(labels)} labels vs {len(values)} values")
+            raise ValueError(f"Mismatch: {len(labels)} labels vs {len(values)} values")
 
         return [
             {label_key: label, value_key: value}
@@ -120,8 +124,7 @@ class PageParser:
 
         container = self.soup.select_one(container_selector)
         if not container:
-            print(f"Container not found: {container_selector}")
-            return []
+            raise ValueError(f"Container not found: {container_selector}")
 
         # 1. Parse Y-axis labels and positions
         y_axis_labels = container.select(y_axis_label_selector)
@@ -135,8 +138,7 @@ class PageParser:
                 continue
 
         if len(y_axis_data) < 2:
-            print("Not enough Y-axis labels to infer scale.")
-            return []
+            raise ValueError("Not enough Y-axis labels to infer scale.")
 
         # Sort top to bottom by pixel
         y_axis_data.sort(key=lambda x: x[0])
@@ -146,14 +148,12 @@ class PageParser:
         # 2. Parse SVG path Y values
         path = container.select_one(svg_path_selector)
         if not path:
-            print(f"SVG path not found: {svg_path_selector}")
-            return []
+            raise ValueError(f"SVG path not found: {svg_path_selector}")
 
         d_attr = path.get("d", "")
         raw_y_coords = re.findall(r"[ML]\s*\d+\.?\d*\s+(\d+\.?\d*)", d_attr)
         if not raw_y_coords:
-            print("No Y values found in SVG path.")
-            return []
+            raise ValueError("No Y values found in SVG path.")
 
         # Detect and apply Y offset from 'transform="translate(...,Y)"'
         y_offset = 0
@@ -176,7 +176,7 @@ class PageParser:
         x_labels = [el.text.strip() for el in container.select(x_label_selector)]
 
         if len(x_labels) != len(y_values):
-            print(f"Mismatch: {len(x_labels)} x-labels vs {len(y_values)} y-values")
+            raise ValueError(f"Mismatch: {len(x_labels)} x-labels vs {len(y_values)} y-values")
 
         return [
             {x_key: x, y_key: y}
