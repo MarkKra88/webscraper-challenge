@@ -52,6 +52,137 @@ class PageParser:
                     return value.text.strip()
         return None
 
+    def extract_repeating_labeled_items(
+            self,
+            item_selector: str,
+            label_selector: str,
+            value_selector: str
+    ) -> list[dict]:
+        """Extracts repeated items with a label and value from a list of blocks."""
+        items = []
+        blocks = self.soup.select(item_selector)
+
+        for block in blocks:
+            label_el = block.select_one(label_selector)
+            value_el = block.select_one(value_selector)
+
+            if label_el and value_el:
+                items.append({
+                    "label": label_el.text.strip(),
+                    "value": value_el.text.strip()
+                })
+
+        return items
+
+    def extract_paired_lists_from_selectors(
+            self,
+            container_selector: str,
+            label_selector: str,
+            value_selector: str,
+            label_key: str = "label",
+            value_key: str = "value"
+    ) -> list[dict]:
+        """
+        Extracts two lists (labels and values) from a specific container and returns them as paired dictionaries.
+        Useful for charts or blocks where items are visually aligned but structurally separated.
+        """
+        container = self.soup.select_one(container_selector)
+        if not container:
+            print(f"Container not found: {container_selector}")
+            return []
+
+        labels = [el.text.strip() for el in container.select(label_selector)]
+        values = [el.text.strip() for el in container.select(value_selector)]
+
+        if len(labels) != len(values):
+            print(f"Mismatch: {len(labels)} labels vs {len(values)} values")
+
+        return [
+            {label_key: label, value_key: value}
+            for label, value in zip(labels, values)
+        ]
+
+    def extract_line_chart_from_svg_path_auto(
+            self,
+            container_selector: str,
+            x_label_selector: str,
+            svg_path_selector: str,
+            y_axis_label_selector: str,
+            x_key: str = "label",
+            y_key: str = "value"
+    ) -> list[dict]:
+        """
+        Smart extractor for SVG-based line charts.
+        Automatically infers pixel-to-value mapping from y-axis labels
+        and adjusts for any SVG group 'transform' offset.
+        """
+        import re
+
+        container = self.soup.select_one(container_selector)
+        if not container:
+            print(f"Container not found: {container_selector}")
+            return []
+
+        # 1. Parse Y-axis labels and positions
+        y_axis_labels = container.select(y_axis_label_selector)
+        y_axis_data = []
+        for el in y_axis_labels:
+            try:
+                value = float(el.text.strip())
+                pixel = float(el.get("y", 0))
+                y_axis_data.append((pixel, value))
+            except (ValueError, TypeError):
+                continue
+
+        if len(y_axis_data) < 2:
+            print("Not enough Y-axis labels to infer scale.")
+            return []
+
+        # Sort top to bottom by pixel
+        y_axis_data.sort(key=lambda x: x[0])
+        y_min_pixel, y_min_value = y_axis_data[0]
+        y_max_pixel, y_max_value = y_axis_data[-1]
+
+        # 2. Parse SVG path Y values
+        path = container.select_one(svg_path_selector)
+        if not path:
+            print(f"SVG path not found: {svg_path_selector}")
+            return []
+
+        d_attr = path.get("d", "")
+        raw_y_coords = re.findall(r"[ML]\s*\d+\.?\d*\s+(\d+\.?\d*)", d_attr)
+        if not raw_y_coords:
+            print("No Y values found in SVG path.")
+            return []
+
+        # Detect and apply Y offset from 'transform="translate(...,Y)"'
+        y_offset = 0
+        series_group = path.find_parent("g")
+        if series_group and series_group.has_attr("transform"):
+            match = re.search(r"translate\(\s*\d+\.?\d*,\s*(\d+\.?\d*)\)", series_group["transform"])
+            if match:
+                y_offset = float(match.group(1))
+
+        y_coords = [float(y) + y_offset for y in raw_y_coords]
+
+        # 3. Map Y-coordinates to actual values
+        def map_y(y_pixel: float) -> float:
+            proportion = (y_pixel - y_min_pixel) / (y_max_pixel - y_min_pixel)
+            return round(y_min_value + proportion * (y_max_value - y_min_value), 2)
+
+        y_values = [map_y(y) for y in y_coords]
+
+        # 4. Get X-axis labels (e.g. months)
+        x_labels = [el.text.strip() for el in container.select(x_label_selector)]
+
+        if len(x_labels) != len(y_values):
+            print(f"Mismatch: {len(x_labels)} x-labels vs {len(y_values)} y-values")
+
+        return [
+            {x_key: x, y_key: y}
+            for x, y in zip(x_labels, y_values)
+        ]
+
 
 if __name__ == "__main__":
     import os
@@ -109,24 +240,50 @@ if __name__ == "__main__":
         label_value="avg-visit-duration",
         value_selector="p.engagement-list__item-value")
 
-    extract_rank_changes = parser.extract_from_nested_by_label_text(
+    extract_rank_changes = parser.extract_line_chart_from_svg_path_auto(
+        container_selector="div.wa-ranking__main-content",
+        x_label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
+        svg_path_selector="g.highcharts-series path.highcharts-graph",
+        y_axis_label_selector="g.highcharts-axis-labels.highcharts-yaxis-labels text",
+        x_key="month",
+        y_key="rank")
+
+    extract_monthly_visits = parser.extract_paired_lists_from_selectors(
+        container_selector="div.wa-traffic__chart",
+        label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
+        value_selector="tspan.wa-traffic__chart-data-label",
+        label_key="month",
+        value_key="visits")
+
+    extract_traffic_change = parser.extract_from_nested_by_label_text(
         container_selector="div.wa-traffic__engagement-item",
         label_tag="span.wa-traffic__engagement-item-title",
         label_text="Last Month Change",
         value_selector="span.wa-traffic__engagement-item-value")
 
-    extract_monthly_visits = ""
-    extract_traffic_change = ""
-    extract_top_countries = ""
-    extract_age_distribution = ""
+    extract_top_countries = parser.extract_repeating_labeled_items(
+        item_selector="div.wa-geography__country.wa-geography__legend-item",
+        label_selector="a.wa-geography__country-name, span.wa-geography__country-name",
+        value_selector="span.wa-geography__country-traffic-value")
+
+    extract_age_distribution = parser.extract_paired_lists_from_selectors(
+        container_selector="div.wa-demographics__age",
+        label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
+        value_selector="tspan.wa-demographics__age-data-label",
+        label_key="age_group",
+        value_key="percentage")
 
     print("global_rank: ", extract_global_rank)
     print("total_visits: ", extract_total_visits)
     print("bounce_rate: ", extract_bounce_rate)
     print("pages_per_visit: ", extract_pages_per_visit)
     print("avg_visit_duration: ", extract_avg_visit_duration)
-    print("rank_changes: ", extract_rank_changes)
-    print("monthly_visits: ", extract_monthly_visits)
+    print("rank_changes: ")
+    pprint(extract_rank_changes)
+    print("monthly_visits: ")
+    pprint(extract_monthly_visits)
     print("last_month_change: ", extract_traffic_change)
-    print("top_countries: ", extract_top_countries)
-    print("age_distribution: ", extract_age_distribution)
+    print("top_countries: ")
+    pprint(extract_top_countries)
+    print("age_distribution: ")
+    pprint(extract_age_distribution)
