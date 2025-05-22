@@ -5,8 +5,9 @@ from typing import Optional
 class PageParser:
     """Parses structured HTML content from Similarweb pages and extracts metrics."""
 
-    def __init__(self, html_content: str):
+    def __init__(self, html_content: str, filename: str = "unknown.html"):
         self.soup = BeautifulSoup(html_content, "html.parser")
+        self.filename = filename
 
     def extract_from_nested(self, parent_selector: str, child_selector: str) -> Optional[str]:
         """ For standard div > p lookups"""
@@ -131,7 +132,8 @@ class PageParser:
         y_axis_data = []
         for el in y_axis_labels:
             try:
-                value = float(el.text.strip())
+                # value = float(el.text.strip())
+                value = float(el.text.strip().replace(',', ''))
                 pixel = float(el.get("y", 0))
                 y_axis_data.append((pixel, value))
             except (ValueError, TypeError):
@@ -185,6 +187,7 @@ class PageParser:
 
 
 if __name__ == "__main__":
+    # For manual testing of PageParser methods
     import os
     from pprint import pprint
 
@@ -201,45 +204,56 @@ if __name__ == "__main__":
         raise FileNotFoundError("No HTML files found in data/raw_html/")
 
     # Pick the file
-    sample_path = os.path.join(raw_html_dir, html_filenames[1])
+    sample_path = os.path.join(raw_html_dir, html_filenames[0])
 
     with open(sample_path, "r", encoding="utf-8") as f:
         html = f.read()
 
-    print(f"Parsing file: {html_filenames[1]}")
+    print(f"Parsing file: {html_filenames[0]}")
     # pprint(html)
 
     parser = PageParser(html)
 
+    print("global_rank: ")
     extract_global_rank = parser.extract_from_nested(
         parent_selector="div.wa-rank-list__item.wa-rank-list__item--global",
         child_selector="p.wa-rank-list__value")
+    print(extract_global_rank)
 
+    print("total_visits: ")
     extract_total_visits = parser.extract_from_nested(
         parent_selector="div.wa-overview__column.wa-overview__column--engagement",
         child_selector="p.engagement-list__item-value")
+    print(extract_total_visits)
 
+    print("bounce_rate: ")
     extract_bounce_rate = parser.extract_from_nested_by_attribute(
         container_selector="div.engagement-list__item",
         label_tag="p",
         label_attr="data-test",
         label_value="bounce-rate",
         value_selector="p.engagement-list__item-value")
+    print(extract_bounce_rate)
 
+    print("pages_per_visit: ")
     extract_pages_per_visit = parser.extract_from_nested_by_attribute(
         container_selector="div.engagement-list__item",
         label_tag="p",
         label_attr="data-test",
         label_value="pages-per-visit",
         value_selector="p.engagement-list__item-value")
+    print(extract_pages_per_visit)
 
+    print("avg_visit_duration: ")
     extract_avg_visit_duration = parser.extract_from_nested_by_attribute(
         container_selector="div.engagement-list__item",
         label_tag="p",
         label_attr="data-test",
         label_value="avg-visit-duration",
         value_selector="p.engagement-list__item-value")
+    print(extract_avg_visit_duration)
 
+    print("rank_changes: ")
     extract_rank_changes = parser.extract_line_chart_from_svg_path_auto(
         container_selector="div.wa-ranking__main-content",
         x_label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
@@ -247,43 +261,46 @@ if __name__ == "__main__":
         y_axis_label_selector="g.highcharts-axis-labels.highcharts-yaxis-labels text",
         x_key="month",
         y_key="rank")
+    pprint(extract_rank_changes)
 
+    print("monthly_visits: ")
     extract_monthly_visits = parser.extract_paired_lists_from_selectors(
         container_selector="div.wa-traffic__chart",
         label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
         value_selector="tspan.wa-traffic__chart-data-label",
         label_key="month",
         value_key="visits")
+    pprint(extract_monthly_visits)
 
+    print("last_month_change: ")
     extract_traffic_change = parser.extract_from_nested_by_label_text(
         container_selector="div.wa-traffic__engagement-item",
         label_tag="span.wa-traffic__engagement-item-title",
         label_text="Last Month Change",
         value_selector="span.wa-traffic__engagement-item-value")
+    print(extract_traffic_change)
 
+    print("top_countries: ")
     extract_top_countries = parser.extract_repeating_labeled_items(
         item_selector="div.wa-geography__country.wa-geography__legend-item",
         label_selector="a.wa-geography__country-name, span.wa-geography__country-name",
         value_selector="span.wa-geography__country-traffic-value")
+    pprint(extract_top_countries)
 
+    print("age_distribution: ")
     extract_age_distribution = parser.extract_paired_lists_from_selectors(
         container_selector="div.wa-demographics__age",
         label_selector="g.highcharts-axis-labels.highcharts-xaxis-labels text",
         value_selector="tspan.wa-demographics__age-data-label",
         label_key="age_group",
         value_key="percentage")
-
-    print("global_rank: ", extract_global_rank)
-    print("total_visits: ", extract_total_visits)
-    print("bounce_rate: ", extract_bounce_rate)
-    print("pages_per_visit: ", extract_pages_per_visit)
-    print("avg_visit_duration: ", extract_avg_visit_duration)
-    print("rank_changes: ")
-    pprint(extract_rank_changes)
-    print("monthly_visits: ")
-    pprint(extract_monthly_visits)
-    print("last_month_change: ", extract_traffic_change)
-    print("top_countries: ")
-    pprint(extract_top_countries)
-    print("age_distribution: ")
     pprint(extract_age_distribution)
+
+
+
+
+
+
+
+
+
