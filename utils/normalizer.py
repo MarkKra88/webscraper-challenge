@@ -73,6 +73,28 @@ class Normalizer:
         except ValueError:
             return None
 
+    @staticmethod
+    def normalize_list_field(data: list[dict], key: str, steps: list) -> list[dict]:
+        """
+        Applies a list of normalization functions to a specific key in a list of dictionaries.
+
+        Example:
+            normalize_list_field(data, key="value", steps=[Normalizer.handle_missing, Normalizer.normalize_percentage])
+        """
+        if not isinstance(data, list):
+            return data
+
+        normalized = []
+        for item in data:
+            if key in item:
+                value = item[key]
+                for step in steps:
+                    value = step(value)
+                item[key] = value
+            normalized.append(item)
+
+        return normalized
+
 if __name__ == "__main__":
     print("normalize_number: ", Normalizer.normalize_number("10.5M"))
     print("normalize_percentage: ", Normalizer.normalize_percentage("55.43%"))
