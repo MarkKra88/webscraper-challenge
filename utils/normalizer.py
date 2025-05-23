@@ -7,6 +7,8 @@ class Normalizer:
         """
         Converts formatted large numbers like '9.1M', '87.0B' to int.
         """
+        if value == "__MISSING__":
+            return "__MISSING__"
         if not value:
             return None
         multipliers = {'K': 1_000, 'M': 1_000_000, 'B': 1_000_000_000}
@@ -25,6 +27,8 @@ class Normalizer:
         """
         Converts '55.43%' to 55.43 (or 0.5543 if preferred)
         """
+        if value == "__MISSING__":
+            return "__MISSING__"
         if not value:
             return None
         try:
@@ -37,6 +41,8 @@ class Normalizer:
         """
         Converts '00:02:26' to total seconds (146)
         """
+        if value == "__MISSING__":
+            return "__MISSING__"
         if not value:
             return None
         parts = value.strip().split(":")
@@ -52,6 +58,8 @@ class Normalizer:
     @staticmethod
     def handle_missing(value: str) -> Optional[str]:
         """Converts known placeholders for missing data into None."""
+        if value == "__MISSING__":
+            return "__MISSING__"
         if not value:
             return None
 
@@ -66,6 +74,8 @@ class Normalizer:
         """
         Converts '#7,435' to 7435
         """
+        if value == "__MISSING__":
+            return "__MISSING__"
         if not value:
             return None
         try:
