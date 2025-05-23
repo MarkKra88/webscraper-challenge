@@ -10,9 +10,18 @@ A data scraping and analysis project for structured HTML pages. The pipeline ext
   - Line/bar chart data (SVG)
   - Top countries and demographics
 - Normalizes values (e.g. "9.1M" → 9100000, "00:03:16" → 196 sec)
-- Handles missing data and special placeholders
+-  Tracks missing data:
+  - Status column: complete, partial, or failed 
+  - List of missing fields for quick inspection
 - Reusable and testable class-based architecture
-- Saves results to `.csv` (can easily extend to SQLite or other formats)
+-  Modular ETL structure with clean interfaces:
+  - Extract → Transform → Load (CSV/SQLite)
+  - Controlled via main.py
+- Saves results to `.csv` and `.sqlite`
+- Auto-generates visual insights:
+  - MoM growth (Visits & Rank)
+  - Relative growth score by site 
+- Fully testable components & error logging
 
 ## Deliverables
 - Cleaned CSV
@@ -39,4 +48,11 @@ A data scraping and analysis project for structured HTML pages. The pipeline ext
 ├── utils/
 │   ├── normalizer.py               # Normalization helpers for formats (%, time, numbers)
 |   └── error_logger.py             # Logs errors and flags
+|
+├── responses.md
 ```
+
+## How to Run
+1. Place raw .html files inside data/raw_html/
+2. pip install -r requirements.txt
+3. From terminal `python main.py`
