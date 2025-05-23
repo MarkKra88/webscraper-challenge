@@ -1,5 +1,5 @@
 import os
-import csv
+import pandas as pd
 import sys
 from pprint import pprint
 from scraper.page_parser import PageParser
@@ -112,61 +112,93 @@ def get_age_distribution(page):
         value_key="percentage"
     )
 
+def extract_and_transform() -> pd.DataFrame:
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    raw_html_dir = os.path.join(ROOT_DIR, "data", "raw_html")
 
-# Define paths
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-raw_html_dir = os.path.join(ROOT_DIR, "data", "raw_html")
-output_csv_path = os.path.join(ROOT_DIR, "data", "output", "data.csv")
+    html_files = [f for f in os.listdir(raw_html_dir) if f.endswith(".html")]
+    if not html_files:
+        raise FileNotFoundError("No HTML files found in data/raw_html/")
 
-# Load HTML files
-html_files = [f for f in os.listdir(raw_html_dir) if f.endswith(".html")]
-if not html_files:
-    raise FileNotFoundError("No HTML files found in data/raw_html/")
+    records = []
+    error_count = 0
 
-records = []
+    for file in html_files:
+        with open(os.path.join(raw_html_dir, file), "r", encoding="utf-8") as f:
+            html = f.read()
 
-for file in html_files:
-    with open(os.path.join(raw_html_dir, file), "r", encoding="utf-8") as f:
-        html = f.read()
+        parser = PageParser(html, filename=file)
 
-    parser = PageParser(html)
+        raw = {
+            "filename": file,
+            "global_rank": get_global_rank(parser),
+            "total_visits": get_total_visits(parser),
+            "bounce_rate": get_bounce_rate(parser),
+            "pages_per_visit": get_pages_per_visit(parser),
+            "avg_visit_duration": get_avg_visit_duration(parser),
+            "last_month_change": get_last_month_change(parser),
+            "rank_changes": get_rank_changes(parser),
+            "monthly_visits": get_monthly_visits(parser),
+            "top_countries": get_top_countries(parser),
+            "age_distribution": get_age_distribution(parser)
+        }
 
-    raw = {
-        "global_rank": get_global_rank(parser),
-        "total_visits": get_total_visits(parser),
-        "bounce_rate": get_bounce_rate(parser),
-        "pages_per_visit": get_pages_per_visit(parser),
-        "avg_visit_duration": get_avg_visit_duration(parser),
-        "last_month_change": get_last_month_change(parser),
-        "rank_changes": get_rank_changes(parser),
-        "monthly_visits": get_monthly_visits(parser),
-        "top_countries": get_top_countries(parser),
-        "age_distribution": get_age_distribution(parser)
-    }
+        missing_fields = [k for k, v in raw.items() if v == "__MISSING__"]
+        if missing_fields:
+            error_count += 1
 
-    clean = {
-        "global_rank": Normalizer.normalize_rank(raw["global_rank"]),
-        "total_visits": Normalizer.normalize_number(raw["total_visits"]),
-        "bounce_rate": Normalizer.normalize_percentage(raw["bounce_rate"]),
-        "pages_per_visit": Normalizer.normalize_number(raw["pages_per_visit"]),
-        "avg_visit_duration": Normalizer.normalize_duration(raw["avg_visit_duration"]),
-        "last_month_change": Normalizer.normalize_percentage(raw["last_month_change"]),
-        "rank_changes": raw["rank_changes"],
-        "monthly_visits": raw["monthly_visits"],
-        "top_countries": raw["top_countries"],
-        "age_distribution": raw["age_distribution"]
-    }
+        if len(missing_fields) == len(raw) - 1:
+            status = "failed"
+        elif missing_fields:
+            status = "partial"
+        else:
+            status = "complete"
 
-    records.append(clean)
+        clean = {
+            "filename": file,
+            "global_rank": Normalizer.normalize_rank(raw["global_rank"]),
+            "total_visits": Normalizer.normalize_number(raw["total_visits"]),
+            "bounce_rate": Normalizer.normalize_percentage(raw["bounce_rate"]),
+            "pages_per_visit": Normalizer.normalize_number(raw["pages_per_visit"]),
+            "avg_visit_duration": Normalizer.normalize_duration(raw["avg_visit_duration"]),
+            "last_month_change": Normalizer.normalize_percentage(raw["last_month_change"]),
+            "rank_changes": Normalizer.normalize_list_field(
+                raw["rank_changes"],
+                key="value",
+                steps=[Normalizer.normalize_percentage]
+            ),
+            "monthly_visits": Normalizer.normalize_list_field(
+                raw["monthly_visits"],
+                key="visits",
+                steps=[Normalizer.normalize_number]
+            ),
+            "top_countries": Normalizer.normalize_list_field(
+                raw["top_countries"],
+                key="value",
+                steps=[Normalizer.normalize_percentage]
+            ),
+            "age_distribution": Normalizer.normalize_list_field(
+                raw["age_distribution"],
+                key="percentage",
+                steps=[Normalizer.handle_missing, Normalizer.normalize_percentage]
+            ),
+            "status": status,
+            "missing_fields": ", ".join(missing_fields) if missing_fields else ""
+        }
 
-pprint(records)
+        records.append(clean)
 
-# # Save results
-# os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
-#
-# with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
-#     writer = csv.DictWriter(f, fieldnames=records[0].keys())
-#     writer.writeheader()
-#     writer.writerows(records)
-#
-# print(f"Data saved to {output_csv_path}")
+    # pprint(clean)
+    df = pd.DataFrame(records)
+
+    if error_count:
+        print(f"{error_count} record(s) contained missing data. See logs or dashboard for detail.")
+    else:
+        print("Extraction completed successfully.")
+
+    return df
+
+if __name__ == "__main__":
+    df = extract_and_transform()
+
+    # print(df.head())
