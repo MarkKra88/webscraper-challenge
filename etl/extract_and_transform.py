@@ -112,11 +112,13 @@ def get_age_distribution(page):
         value_key="percentage"
     )
 
+
 def extract_and_transform() -> pd.DataFrame:
-    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     raw_html_dir = os.path.join(ROOT_DIR, "data", "raw_html")
 
     html_files = [f for f in os.listdir(raw_html_dir) if f.endswith(".html")]
+
     if not html_files:
         raise FileNotFoundError("No HTML files found in data/raw_html/")
 
@@ -197,6 +199,7 @@ def extract_and_transform() -> pd.DataFrame:
         print("Extraction completed successfully.")
 
     return df
+
 
 if __name__ == "__main__":
     df = extract_and_transform()
