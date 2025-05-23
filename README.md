@@ -21,14 +21,22 @@ A data scraping and analysis project for structured HTML pages. The pipeline ext
 
 ## Structure
 ```
-├── run_pipeline.py          # Main runner (batch extracts all HTMLs)
+├── main.py                         # Orchestrator: extract + transform + load menu
+├── etl/
+│   ├── extract_and_transform.py    # ET logic → returns pandas DataFrame
+│   └── load_to_db.py               # Loads DF into SQLite (future extensible to other DBs)
+│
 ├── data/
-│   ├── raw_html/            # Input HTML files
-│   └── output/              # Processed CSV output
+│   ├── raw_html/                   # Input HTML files
+│   ├── logs/                       # Register errors from all extractions
+│   └── output/                     # Processed CSV output
+|       ├── csv/                    # Processed CSV output
+|       └── sqlite/                 # SQLite DBs
 │
 ├── scraper/
-│   └── page_parser.py       # HTML parser class with all extractors
+│   └── page_parser.py              # HTML parser class with all extractors
 │
 ├── utils/
-│   └── normalizer.py        # Normalization helpers for formats (%, time, numbers)
+│   ├── normalizer.py               # Normalization helpers for formats (%, time, numbers)
+|   └── error_logger.py             # Logs errors and flags
 ```
