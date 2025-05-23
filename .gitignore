@@ -2,7 +2,7 @@
 .venv/
 
 # Data folder
-data/
+data/logs
 
 # IDE
 .idea/
